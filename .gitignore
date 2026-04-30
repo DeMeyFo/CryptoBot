@@ -1,0 +1,16 @@
+# Secrets
+.env
+
+# Runtime data
+*.db
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Claude internal
+.claude/
