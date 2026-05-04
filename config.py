@@ -55,5 +55,9 @@ USE_ATR_SL_TP     = os.getenv("USE_ATR_SL_TP", "true").lower() == "true"
 ATR_SL_MULTIPLIER = float(os.getenv("ATR_SL_MULTIPLIER", "2.0"))
 ATR_TP_MULTIPLIER = float(os.getenv("ATR_TP_MULTIPLIER", "3.5"))
 
+# --- Claude AI Sentiment (optional) ---
+CLAUDE_API_KEY        = os.getenv("CLAUDE_API_KEY", "")
+USE_CLAUDE_SENTIMENT  = os.getenv("USE_CLAUDE_SENTIMENT", "false").lower() == "true"
+
 # --- Persistence ---
 DB_PATH = "crypto_bot.db"
