@@ -12,25 +12,37 @@ def init_db():
     with _conn() as c:
         c.execute("""
             CREATE TABLE IF NOT EXISTS trades (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                symbol        TEXT    NOT NULL,
-                side          TEXT    NOT NULL,
-                entry_price   REAL    NOT NULL,
-                size_usdt     REAL    NOT NULL,
-                leverage      INTEGER NOT NULL,
-                stop_loss     REAL,
-                take_profit   REAL,
-                status        TEXT    DEFAULT 'open',
-                exit_price    REAL,
-                pnl_usdt      REAL,
-                pnl_pct       REAL,
-                dry_run       INTEGER DEFAULT 1,
-                opened_at     TEXT    NOT NULL,
-                closed_at     TEXT,
-                signal_score  REAL,
-                order_id      TEXT
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol          TEXT    NOT NULL,
+                side            TEXT    NOT NULL,
+                entry_price     REAL    NOT NULL,
+                size_usdt       REAL    NOT NULL,
+                leverage        INTEGER NOT NULL,
+                stop_loss       REAL,
+                take_profit     REAL,
+                status          TEXT    DEFAULT 'open',
+                exit_price      REAL,
+                pnl_usdt        REAL,
+                pnl_pct         REAL,
+                dry_run         INTEGER DEFAULT 1,
+                opened_at       TEXT    NOT NULL,
+                closed_at       TEXT,
+                signal_score    REAL,
+                order_id        TEXT,
+                pyramid_count   INTEGER DEFAULT 0,
+                is_pyramid      INTEGER DEFAULT 0,
+                parent_trade_id INTEGER
             )
         """)
+        # Migrate existing tables that are missing pyramid columns
+        existing = _cols(c, "trades")
+        for col, definition in [
+            ("pyramid_count",   "INTEGER DEFAULT 0"),
+            ("is_pyramid",      "INTEGER DEFAULT 0"),
+            ("parent_trade_id", "INTEGER"),
+        ]:
+            if col not in existing:
+                c.execute(f"ALTER TABLE trades ADD COLUMN {col} {definition}")
         c.execute("""
             CREATE TABLE IF NOT EXISTS signals (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,18 +63,44 @@ def _cols(conn, table: str) -> list:
 
 
 def save_trade(symbol, side, entry_price, size_usdt, leverage,
-               stop_loss, take_profit, dry_run, signal_score=None, order_id=None) -> int:
+               stop_loss, take_profit, dry_run, signal_score=None, order_id=None,
+               is_pyramid=False, parent_trade_id=None) -> int:
     with _conn() as c:
         cur = c.execute("""
             INSERT INTO trades
                 (symbol, side, entry_price, size_usdt, leverage,
-                 stop_loss, take_profit, dry_run, opened_at, signal_score, order_id)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                 stop_loss, take_profit, dry_run, opened_at, signal_score, order_id,
+                 is_pyramid, parent_trade_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (symbol, side, entry_price, size_usdt, leverage,
               stop_loss, take_profit, 1 if dry_run else 0,
-              datetime.utcnow().isoformat(), signal_score, order_id))
+              datetime.utcnow().isoformat(), signal_score, order_id,
+              1 if is_pyramid else 0, parent_trade_id))
         c.commit()
         return cur.lastrowid
+
+
+def update_trade_sl(trade_id: int, new_sl: float):
+    """Move stop-loss to a new level (used for breakeven on pyramid entry)."""
+    with _conn() as c:
+        c.execute("UPDATE trades SET stop_loss=? WHERE id=?", (new_sl, trade_id))
+        c.commit()
+
+
+def increment_pyramid_count(trade_id: int):
+    with _conn() as c:
+        c.execute("UPDATE trades SET pyramid_count = pyramid_count + 1 WHERE id=?", (trade_id,))
+        c.commit()
+
+
+def get_latest_signal_score(symbol: str) -> float:
+    """Return the most recently saved final_score for symbol, or 0 if none."""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT final_score FROM signals WHERE symbol=? ORDER BY timestamp DESC LIMIT 1",
+            (symbol,)
+        ).fetchone()
+        return row[0] if row else 0.0
 
 
 def close_trade(trade_id: int, exit_price: float, status: str) -> float:

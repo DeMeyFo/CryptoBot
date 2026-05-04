@@ -72,16 +72,21 @@ def get_tickers() -> list:
     return tickers
 
 
+# Backtested whitelist – ordered by backtest performance (Profit Factor desc)
+# Update this list after running new backtests.
+WHITELIST = [
+    "SOLUSDT",    # PF 1.33  WR 47%  (3m Binance)
+    "TAOUSDT",    # PF 1.25  WR 48%  (3m Binance)
+    "BTCUSDT",    # PF 1.36  WR 49%  (3m Binance)
+    "CLUSDT",     # PF 3.30  WR 50%  (1H backtest – no Binance data)
+    "BUSDT",      # PF 3.00  WR 57%  (1H backtest – no Binance data)
+    "RAVEUSDT",   # PF inf   WR 100% (1H backtest – no Binance data)
+]
+
+
 def get_top_symbols(count: int) -> list:
-    symbols = []
-    for t in get_tickers():
-        sym = t.get("symbol", "")
-        vol = float(t.get("usdtVolume") or 0)
-        if sym.endswith("USDT") and vol > 5_000_000:
-            symbols.append(sym)
-        if len(symbols) >= count:
-            break
-    return symbols
+    """Return the whitelisted symbols (up to count). Order = backtest rank."""
+    return WHITELIST[:count]
 
 
 def get_candles(symbol: str, granularity: str = "15m", limit: int = 200) -> list:
@@ -111,6 +116,25 @@ def get_ticker(symbol: str) -> dict:
 def get_current_price(symbol: str) -> float:
     t = get_ticker(symbol)
     return float(t.get("lastPr") or t.get("last") or 0)
+
+
+def get_funding_rate(symbol: str) -> float:
+    """
+    Return the current funding rate as a decimal (e.g. 0.0001 = 0.01%).
+    Positive = longs pay shorts (crowded longs → bearish bias).
+    Negative = shorts pay longs (crowded shorts → bullish bias).
+    """
+    resp = _get("/api/v2/mix/market/current-fund-rate", {
+        "symbol": symbol,
+        "productType": PRODUCT_TYPE,
+    })
+    if resp.get("code") == "00000":
+        data = resp.get("data")
+        if isinstance(data, list):
+            data = data[0] if data else {}
+        if isinstance(data, dict):
+            return float(data.get("fundingRate") or 0)
+    return 0.0
 
 
 def get_contract_info(symbol: str) -> dict:
