@@ -295,6 +295,25 @@ def get_market_regime() -> str:
     recent   = sorted(_articles, key=lambda a: a["age_s"])[:10]
     headlines = "\n".join(f"- {a['text'][:150]}" for a in recent)
 
+    # Fetch BTC price context for accurate regime detection
+    btc_price     = 0.0
+    btc_change_24h = 0.0
+    btc_change_7d  = 0.0
+    try:
+        from bitget_client import get_current_price, get_candles, get_ticker
+        btc_price  = get_current_price("BTCUSDT")
+        ticker     = get_ticker("BTCUSDT")
+        btc_change_24h = float(ticker.get("change24H") or 0) * 100
+        candles = get_candles("BTCUSDT", "1D", 8)
+        if candles and len(candles) >= 2:
+            candles_sorted = sorted(candles, key=lambda c: int(c[0]))
+            oldest_close = float(candles_sorted[0][4])
+            newest_close = float(candles_sorted[-1][4])
+            if oldest_close > 0:
+                btc_change_7d = (newest_close - oldest_close) / oldest_close * 100
+    except Exception as e:
+        logger.debug(f"BTC context fetch error: {e}")
+
     try:
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
@@ -303,6 +322,9 @@ def get_market_regime() -> str:
                 "role": "user",
                 "content": (
                     f"Crypto market context:\n"
+                    f"- BTC price: ${btc_price:,.0f}\n"
+                    f"- BTC 24h change: {btc_change_24h:+.2f}%\n"
+                    f"- BTC 7-day change: {btc_change_7d:+.2f}%\n"
                     f"- Fear & Greed Index: {fg_index}/100\n"
                     f"Recent headlines:\n{headlines}\n\n"
                     f"Classify the current crypto market regime.\n"
