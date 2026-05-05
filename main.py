@@ -7,6 +7,7 @@ from config import (
     MIN_POSITION_USDT, MAX_POSITION_USDT, HIGH_CONVICTION_SCORE,
     TOP_COINS_COUNT, LOOP_INTERVAL_SECONDS, MAX_OPEN_POSITIONS,
     LONG_THRESHOLD, TRAILING_STOP_PCT, CANDLE_INTERVAL,
+    DAILY_LOSS_LIMIT_USDT,
 )
 from bitget_client import get_top_symbols, get_current_price, place_order, close_order
 from strategy import analyze_symbol
@@ -15,6 +16,7 @@ from news_sentiment import validate_trade, get_claude_exit_signals
 from database import (
     init_db, save_trade, close_trade, get_open_trades,
     update_trade_sl, increment_pyramid_count, get_latest_signal_score,
+    get_daily_pnl,
 )
 
 logging.basicConfig(
@@ -203,9 +205,24 @@ def _open_position_count() -> int:
     return sum(1 for t in get_open_trades(dry_run=DRY_RUN) if not t.get("is_pyramid"))
 
 
+def _daily_loss_limit_hit() -> bool:
+    """Circuit breaker: block new entries if today's realised loss exceeds the limit."""
+    daily_pnl = get_daily_pnl()
+    if daily_pnl < -DAILY_LOSS_LIMIT_USDT:
+        logger.warning(
+            f"🛑 Daily loss limit hit: {daily_pnl:+.2f} USDT "
+            f"(limit −{DAILY_LOSS_LIMIT_USDT:.0f} USDT) – no new entries today"
+        )
+        return True
+    return False
+
+
 def scan_new_entries():
     if _open_position_count() >= MAX_OPEN_POSITIONS:
         logger.info(f"Max positions reached ({MAX_OPEN_POSITIONS}) – skipping scan")
+        return
+
+    if _daily_loss_limit_hit():
         return
 
     symbols = get_top_symbols(TOP_COINS_COUNT)

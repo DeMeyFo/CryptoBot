@@ -1,12 +1,12 @@
 import logging
 from config import (
-    TA_WEIGHT, NEWS_WEIGHT, FEAR_GREED_WEIGHT, FUNDING_WEIGHT,
+    TA_WEIGHT, NEWS_WEIGHT, FEAR_GREED_WEIGHT, FUNDING_WEIGHT, OI_WEIGHT,
     LONG_THRESHOLD, SHORT_THRESHOLD, CONFIRM_TIMEFRAME,
     ADX_NO_TREND, ADX_WEAK_TREND, ADX_STRONG_TREND,
 )
 from technical_analysis import calculate_signals
 from news_sentiment import get_news_sentiment, get_fear_greed_score, get_market_regime
-from bitget_client import get_funding_rate
+from bitget_client import get_funding_rate, get_oi_score
 from database import save_signal
 
 logger = logging.getLogger(__name__)
@@ -92,13 +92,15 @@ def analyze_symbol(symbol: str) -> dict:
     fear_greed_score = get_fear_greed_score()
     funding_rate     = get_funding_rate(symbol)
     funding_score    = _funding_to_score(funding_rate)
+    oi_score         = get_oi_score(symbol)
 
     # ── Weighted combination ──────────────────────────────────────────────────
     raw_score = (
         ta_score         * TA_WEIGHT +
         news_score       * NEWS_WEIGHT +
         fear_greed_score * FEAR_GREED_WEIGHT +
-        funding_score    * FUNDING_WEIGHT
+        funding_score    * FUNDING_WEIGHT +
+        oi_score         * OI_WEIGHT
     )
 
     # ── ADX strength factor ───────────────────────────────────────────────────
@@ -132,7 +134,7 @@ def analyze_symbol(symbol: str) -> dict:
 
     logger.info(
         f"{symbol:12s}  TA={ta_score:+.1f}  ADX={adx:.1f}  News={news_score:+.1f}"
-        f"  FG={fear_greed_score:+.1f}  Fund={funding_rate*100:+.4f}%"
+        f"  FG={fear_greed_score:+.1f}  Fund={funding_rate*100:+.4f}%  OI={oi_score:+.1f}"
         f"  MTF×{mtf_factor:.2f}  Regime={regime}×{regime_factor:.2f}"
         f"  Final={final_score:+.1f}  → {action.upper()}"
     )
@@ -149,5 +151,6 @@ def analyze_symbol(symbol: str) -> dict:
         "indicators":       indicators,
         "atr":              atr,
         "adx":              adx,
+        "oi_score":         oi_score,
         "regime":           regime,
     }

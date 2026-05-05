@@ -118,6 +118,82 @@ def get_current_price(symbol: str) -> float:
     return float(t.get("lastPr") or t.get("last") or 0)
 
 
+_oi_cache: dict[str, tuple[float, float]] = {}  # symbol → (unix_ts, oi_usdt)
+
+
+def get_open_interest(symbol: str) -> float:
+    """Return current open interest in USDT. Returns 0 on error."""
+    resp = _get("/api/v2/mix/market/open-interest", {
+        "symbol": symbol,
+        "productType": PRODUCT_TYPE,
+    })
+    if resp.get("code") != "00000":
+        return 0.0
+    data = resp.get("data", {})
+    if isinstance(data, list):
+        data = data[0] if data else {}
+    # Top-level usdtSize
+    usdt_size = data.get("usdtSize") or data.get("openInterestUSDT")
+    if usdt_size:
+        return float(usdt_size)
+    # Nested openInterestList
+    oi_list = data.get("openInterestList") or []
+    if oi_list:
+        return float(oi_list[0].get("usdtSize", 0) or 0)
+    return 0.0
+
+
+def get_oi_score(symbol: str) -> float:
+    """
+    Open Interest signal score in [-50, +50].
+
+    Logic (standard futures interpretation):
+      OI rising  + price rising  → longs entering   → bullish  (+)
+      OI rising  + price falling → shorts entering  → bearish  (-)
+      OI falling + price rising  → short squeeze    → mild +
+      OI falling + price falling → longs liquidating→ bearish  (-)
+
+    OI is compared to the cached value from the previous cycle (~5 min).
+    Price direction is derived from the ticker's 24h change as a proxy.
+    Returns 0.0 if OI data is unavailable or the cache is too fresh/stale.
+    """
+    import time as _t
+    now = _t.time()
+
+    oi = get_open_interest(symbol)
+    if oi == 0:
+        return 0.0
+
+    ticker     = get_ticker(symbol)
+    price_chg  = float(ticker.get("change24H") or ticker.get("chgUtc") or 0)
+    price_up   = price_chg > 0
+    price_down = price_chg < 0
+
+    score = 0.0
+    if symbol in _oi_cache:
+        prev_ts, prev_oi = _oi_cache[symbol]
+        age = now - prev_ts
+        if 30 <= age <= 1800 and prev_oi > 0:
+            oi_chg = (oi - prev_oi) / prev_oi * 100  # percent change
+
+            if oi_chg > 0.3 and price_up:
+                score = min(50.0, oi_chg * 8)    # longs building → bullish
+            elif oi_chg > 0.3 and price_down:
+                score = max(-50.0, -oi_chg * 6)  # shorts building → bearish
+            elif oi_chg < -0.3 and price_up:
+                score = 15.0                      # short squeeze → mild bull
+            elif oi_chg < -0.3 and price_down:
+                score = max(-30.0, oi_chg * 4)   # longs liquidating → bearish
+
+            logger.debug(
+                f"OI {symbol}: {prev_oi/1e6:.1f}M→{oi/1e6:.1f}M USDT "
+                f"({oi_chg:+.2f}%) price24h={price_chg:+.3f} → score {score:+.1f}"
+            )
+
+    _oi_cache[symbol] = (now, oi)
+    return round(score, 1)
+
+
 def get_funding_rate(symbol: str) -> float:
     """
     Return the current funding rate as a decimal (e.g. 0.0001 = 0.01%).

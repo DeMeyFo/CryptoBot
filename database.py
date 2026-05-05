@@ -185,6 +185,18 @@ def get_latest_signals(limit: int = 30) -> list:
         return [dict(zip(cols, r)) for r in rows]
 
 
+def get_daily_pnl() -> float:
+    """Sum of realised PnL for all trades closed today (UTC date)."""
+    today = datetime.utcnow().date().isoformat()  # "YYYY-MM-DD"
+    with _conn() as c:
+        result = c.execute(
+            "SELECT SUM(pnl_usdt) FROM trades "
+            "WHERE status != 'open' AND closed_at >= ? AND pnl_usdt IS NOT NULL",
+            (today,),
+        ).fetchone()
+        return result[0] or 0.0
+
+
 def get_pnl_history() -> list:
     with _conn() as c:
         rows = c.execute("""

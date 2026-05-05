@@ -21,9 +21,10 @@ TOP_COINS_COUNT      = int(os.getenv("TOP_COINS_COUNT", "20"))         # was 10
 LOOP_INTERVAL_SECONDS = int(os.getenv("LOOP_INTERVAL", "300"))
 
 # --- Risk Management ---
-STOP_LOSS_PCT     = float(os.getenv("STOP_LOSS_PCT", "0.02"))
-TAKE_PROFIT_PCT   = float(os.getenv("TAKE_PROFIT_PCT", "0.04"))
-MAX_OPEN_POSITIONS = int(os.getenv("MAX_OPEN_POSITIONS", "3"))
+STOP_LOSS_PCT          = float(os.getenv("STOP_LOSS_PCT", "0.02"))
+TAKE_PROFIT_PCT        = float(os.getenv("TAKE_PROFIT_PCT", "0.04"))
+MAX_OPEN_POSITIONS     = int(os.getenv("MAX_OPEN_POSITIONS", "3"))
+DAILY_LOSS_LIMIT_USDT  = float(os.getenv("DAILY_LOSS_LIMIT_USDT", "300"))
 
 # --- Trailing Stop ---
 TRAILING_STOP_PCT = float(os.getenv("TRAILING_STOP_PCT", "0.02"))  # 2% trail distance
@@ -42,10 +43,11 @@ LONG_THRESHOLD  = 55
 SHORT_THRESHOLD = -55
 
 # --- Signal Weights (must sum to 1.0) ---
-TA_WEIGHT          = 0.55
+TA_WEIGHT          = 0.50
 NEWS_WEIGHT        = 0.15
 FEAR_GREED_WEIGHT  = 0.10
-FUNDING_WEIGHT     = 0.20
+FUNDING_WEIGHT     = 0.15
+OI_WEIGHT          = 0.10
 
 # --- Multi-Timeframe Confirmation ---
 CONFIRM_TIMEFRAME = os.getenv("CONFIRM_TIMEFRAME", "1H")
