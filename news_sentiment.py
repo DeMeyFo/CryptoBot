@@ -370,13 +370,14 @@ def validate_trade(symbol: str, action: str, analysis: dict) -> tuple[bool, str]
     if not client:
         return True, "Client unavailable"
 
-    ind    = analysis.get("indicators", {})
-    regime = get_market_regime()   # uses cached value – no extra API call
+    ind          = analysis.get("indicators", {})
+    regime       = get_market_regime()
+    funding_pct  = analysis.get("funding_rate", 0) * 100
 
     try:
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=100,
+            max_tokens=120,
             messages=[{
                 "role": "user",
                 "content": (
@@ -388,8 +389,12 @@ def validate_trade(symbol: str, action: str, analysis: dict) -> tuple[bool, str]
                     f"Final={analysis.get('final_score', 0):+.1f}/100\n"
                     f"ADX={ind.get('adx', 0):.1f}  "
                     f"RSI={ind.get('rsi', 50):.1f}  "
-                    f"Funding={analysis.get('funding_rate', 0)*100:+.4f}%\n"
+                    f"Funding={funding_pct:+.4f}%\n"
                     f"Market regime: {regime}\n\n"
+                    f"FUTURES FUNDING RATE GUIDE:\n"
+                    f"  Negative = shorts pay longs = bullish signal (crowded shorts)\n"
+                    f"  Positive = longs pay shorts = bearish if >+0.05% (crowded longs)\n"
+                    f"  Neutral range: -0.05% to +0.05%\n\n"
                     f"Approve or reject. "
                     f"JSON only: {{\"approve\": true/false, \"reason\": \"one sentence\"}}"
                 ),
