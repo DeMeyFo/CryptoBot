@@ -61,5 +61,9 @@ ATR_TP_MULTIPLIER = float(os.getenv("ATR_TP_MULTIPLIER", "3.5"))
 CLAUDE_API_KEY        = os.getenv("CLAUDE_API_KEY", "")
 USE_CLAUDE_SENTIMENT  = os.getenv("USE_CLAUDE_SENTIMENT", "false").lower() == "true"
 
+# --- Telegram Notifications ---
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID   = os.getenv("TELEGRAM_CHAT_ID", "")
+
 # --- Persistence ---
 DB_PATH = "crypto_bot.db"

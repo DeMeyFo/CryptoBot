@@ -13,6 +13,10 @@ from bitget_client import get_top_symbols, get_current_price, place_order, close
 from strategy import analyze_symbol
 from risk_manager import best_sl_tp, calculate_atr_sl_tp, progress_to_tp, check_exit, unrealized_pnl
 from news_sentiment import validate_trade, get_claude_exit_signals
+from telegram_notify import (
+    notify_bot_started, notify_trade_opened, notify_trade_closed,
+    notify_claude_rejected, notify_daily_loss_limit, notify_daily_summary,
+)
 from database import (
     init_db, save_trade, close_trade, get_open_trades,
     update_trade_sl, increment_pyramid_count, get_latest_signal_score,
@@ -49,6 +53,7 @@ def _banner():
     logger.info(f"  Max open: {MAX_OPEN_POSITIONS}  │  Trailing: {TRAILING_STOP_PCT*100:.1f}%  │  Candles: {CANDLE_INTERVAL}")
     logger.info(f"  Position check: {_POSITION_CHECK_INTERVAL}s  │  Entry scan: {_ENTRY_SCAN_INTERVAL}s")
     logger.info("=" * 60)
+    notify_bot_started(mode, LEVERAGE, MIN_POSITION_USDT, MAX_POSITION_USDT)
 
 
 # ── Dynamic position sizing ───────────────────────────────────────────────────
@@ -169,13 +174,14 @@ def manage_open_trades():
 
         # ── Claude emergency exit ─────────────────────────────────────────────
         if claude_exits.get(coin) or claude_exits.get(trade["symbol"]):
-            pnl_now = unrealized_pnl(trade, price)
             close_order(trade["symbol"], trade["side"], trade["entry_price"], trade["size_usdt"])
             realised = close_trade(trade["id"], price, "closed_claude_exit")
             logger.warning(
                 f"🤖 CLAUDE EXIT  {trade['side'].upper()} {trade['symbol']}"
                 f"  exit={price:.6g}  PnL={realised:+.2f} USDT  (emergency news signal)"
             )
+            notify_trade_closed(trade["symbol"], trade["side"], "closed_claude_exit",
+                                price, realised, DRY_RUN)
             continue
 
         pnl    = unrealized_pnl(trade, price)
@@ -189,6 +195,8 @@ def manage_open_trades():
                 f"{icon} {reason.upper():12s}  {trade['side'].upper()} {trade['symbol']}"
                 f"  exit={price:.6g}  PnL={realised:+.2f} USDT"
             )
+            notify_trade_closed(trade["symbol"], trade["side"], reason,
+                                price, realised, DRY_RUN)
         else:
             logger.debug(
                 f"  HOLD  {trade['side'].upper()} {trade['symbol']}"
@@ -223,6 +231,7 @@ def scan_new_entries():
         return
 
     if _daily_loss_limit_hit():
+        notify_daily_loss_limit(get_daily_pnl(), DAILY_LOSS_LIMIT_USDT)
         return
 
     symbols = get_top_symbols(TOP_COINS_COUNT)
@@ -255,6 +264,7 @@ def scan_new_entries():
         approved, reason = validate_trade(symbol, action, analysis)
         if not approved:
             logger.info(f"  🚫 Claude rejected {action.upper()} {symbol}: {reason}")
+            notify_claude_rejected(symbol, action, reason)
             continue
 
         order = place_order(symbol, action, pos_size, LEVERAGE, price)
@@ -275,6 +285,14 @@ def scan_new_entries():
             f"  score={analysis['final_score']:+.1f}  ADX={analysis.get('adx', 0):.1f}"
             f"  trade_id={trade_id}"
         )
+        notify_trade_opened(
+            symbol=symbol, side=action, price=price,
+            size=pos_size, score=analysis["final_score"],
+            sl=sl, tp=tp,
+            adx=analysis.get("adx", 0),
+            regime=analysis.get("regime", "unknown"),
+            dry_run=DRY_RUN,
+        )
         open_syms.add(symbol)
 
 
@@ -284,7 +302,8 @@ def main():
     _banner()
     init_db()
 
-    last_entry_scan = 0.0
+    last_entry_scan   = 0.0
+    last_daily_summary = 0.0   # unix timestamp of last summary
 
     while True:
         try:
@@ -298,6 +317,26 @@ def main():
                 logger.info("─── entry scan ────────────────────────────────────")
                 scan_new_entries()
                 last_entry_scan = time.time()
+
+            # ── Daily summary at UTC midnight ─────────────────────────────────
+            from datetime import datetime, timezone
+            today_midnight = datetime.now(timezone.utc).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            ).timestamp()
+            if last_daily_summary < today_midnight:
+                from database import get_all_trades
+                trades_today = [
+                    t for t in get_all_trades(limit=100)
+                    if t.get("closed_at", "").startswith(
+                        datetime.now(timezone.utc).date().isoformat()
+                    )
+                ]
+                notify_daily_summary(
+                    trades_today=trades_today,
+                    open_positions=_open_position_count(),
+                    daily_pnl=get_daily_pnl(),
+                )
+                last_daily_summary = time.time()
 
         except KeyboardInterrupt:
             logger.info("Stopped by user.")
