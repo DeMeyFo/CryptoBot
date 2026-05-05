@@ -1,4 +1,5 @@
 import logging
+import subprocess
 import sys
 import time
 
@@ -45,10 +46,22 @@ _POSITION_CHECK_INTERVAL = 60    # trailing stop + SL/TP check every 60s
 _ENTRY_SCAN_INTERVAL     = LOOP_INTERVAL_SECONDS  # new entries every 5min
 
 
+def _git_version() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=__file__.rsplit("/", 1)[0] or ".",
+            text=True, stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return "unknown"
+
+
 def _banner():
-    mode = "DRY-RUN" if DRY_RUN else "LIVE"
+    mode    = "DRY-RUN" if DRY_RUN else "LIVE"
+    version = _git_version()
     logger.info("=" * 60)
-    logger.info(f"  Crypto Futures Bot  –  {mode}")
+    logger.info(f"  Crypto Futures Bot  –  {mode}  │  v{version}")
     logger.info(f"  Leverage: {LEVERAGE}x  │  Positions: {MIN_POSITION_USDT}–{MAX_POSITION_USDT} USDT")
     logger.info(f"  Max open: {MAX_OPEN_POSITIONS}  │  Trailing: {TRAILING_STOP_PCT*100:.1f}%  │  Candles: {CANDLE_INTERVAL}")
     logger.info(f"  Position check: {_POSITION_CHECK_INTERVAL}s  │  Entry scan: {_ENTRY_SCAN_INTERVAL}s")
