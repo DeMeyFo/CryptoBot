@@ -54,7 +54,7 @@ COIN_PATTERNS: dict[str, list[str]] = {
 
 # Coins where keyword matching is unreliable (too generic or no major-outlet coverage)
 # For these, news score is forced to 0 – bot relies on TA/Funding/OI instead.
-_NO_NEWS_COINS = {"CLU", "BUS", "RAVE", "BZ", "NAORI", "AIGENSYN"}
+_NO_NEWS_COINS = {"CL", "B", "RAVE", "BZ", "NAORI", "AIGENSYN"}
 
 _ARTICLE_TTL      = 900    # 15 min
 _FEAR_GREED_TTL   = 3600   # 1 hour
