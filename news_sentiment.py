@@ -303,7 +303,7 @@ def get_market_regime() -> str:
         from bitget_client import get_current_price, get_candles, get_ticker
         btc_price  = get_current_price("BTCUSDT")
         ticker     = get_ticker("BTCUSDT")
-        btc_change_24h = float(ticker.get("change24H") or 0) * 100
+        btc_change_24h = float(ticker.get("change24h") or ticker.get("changeUtc24h") or 0) * 100
         candles = get_candles("BTCUSDT", "1D", 8)
         if candles and len(candles) >= 2:
             candles_sorted = sorted(candles, key=lambda c: int(c[0]))

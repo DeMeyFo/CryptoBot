@@ -165,7 +165,7 @@ def get_oi_score(symbol: str) -> float:
         return 0.0
 
     ticker     = get_ticker(symbol)
-    price_chg  = float(ticker.get("change24H") or ticker.get("chgUtc") or 0)
+    price_chg  = float(ticker.get("change24h") or ticker.get("changeUtc24h") or 0)
     price_up   = price_chg > 0
     price_down = price_chg < 0
 
