@@ -123,7 +123,11 @@ _oi_cache: dict[str, tuple[float, float]] = {}  # symbol → (unix_ts, oi_usdt)
 
 
 def get_open_interest(symbol: str) -> float:
-    """Return current open interest in USDT. Returns 0 on error."""
+    """
+    Return current open interest in contracts.
+    Bitget v2 returns 'size' (contract count), not a USDT value.
+    % change is identical regardless of unit, so this is fine for OI scoring.
+    """
     resp = _get("/api/v2/mix/market/open-interest", {
         "symbol": symbol,
         "productType": PRODUCT_TYPE,
@@ -131,16 +135,9 @@ def get_open_interest(symbol: str) -> float:
     if resp.get("code") != "00000":
         return 0.0
     data = resp.get("data", {})
-    if isinstance(data, list):
-        data = data[0] if data else {}
-    # Top-level usdtSize
-    usdt_size = data.get("usdtSize") or data.get("openInterestUSDT")
-    if usdt_size:
-        return float(usdt_size)
-    # Nested openInterestList
-    oi_list = data.get("openInterestList") or []
+    oi_list = data.get("openInterestList", [])
     if oi_list:
-        return float(oi_list[0].get("usdtSize", 0) or 0)
+        return float(oi_list[0].get("size", 0) or 0)
     return 0.0
 
 
