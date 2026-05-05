@@ -337,7 +337,13 @@ def get_market_regime() -> str:
         if match:
             regime = match.group(1)
             _market_regime_cache = (now, regime)
-            logger.info(f"Market regime updated: {regime.upper()}")
+            logger.info(
+                f"Market regime: {regime.upper()}"
+                f"  BTC ${btc_price:,.0f}"
+                f"  24h {btc_change_24h:+.2f}%"
+                f"  7d {btc_change_7d:+.2f}%"
+                f"  FG {fg_index}/100"
+            )
             return regime
     except Exception as e:
         logger.debug(f"Market regime error: {e}")
