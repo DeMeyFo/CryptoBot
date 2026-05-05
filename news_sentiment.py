@@ -52,6 +52,10 @@ COIN_PATTERNS: dict[str, list[str]] = {
     "RAVE":  [r"\brave token\b", r"\brave\b"],
 }
 
+# Coins where keyword matching is unreliable (too generic or no major-outlet coverage)
+# For these, news score is forced to 0 – bot relies on TA/Funding/OI instead.
+_NO_NEWS_COINS = {"CLU", "BUS", "RAVE", "BZ", "NAORI", "AIGENSYN"}
+
 _ARTICLE_TTL      = 900    # 15 min
 _FEAR_GREED_TTL   = 3600   # 1 hour
 _MARKET_REGIME_TTL = 4 * 3600  # 4 hours
@@ -414,6 +418,10 @@ def get_news_sentiment(symbol: str) -> float:
     Uses Claude (batch call) when enabled, falls back to VADER.
     """
     coin = symbol.replace("USDT", "").replace("PERP", "").upper()
+
+    # Skip news for coins with unreliable keyword matching
+    if coin in _NO_NEWS_COINS:
+        return 0.0
 
     if coin in _score_cache:
         ts, val = _score_cache[coin]
