@@ -5,7 +5,7 @@ from config import (
     ADX_NO_TREND, ADX_WEAK_TREND, ADX_STRONG_TREND,
 )
 from technical_analysis import calculate_signals
-from news_sentiment import get_news_sentiment, get_fear_greed_score
+from news_sentiment import get_news_sentiment, get_fear_greed_score, get_market_regime
 from bitget_client import get_funding_rate
 from database import save_signal
 
@@ -105,8 +105,20 @@ def analyze_symbol(symbol: str) -> dict:
     raw_score = raw_score * adx_mult
 
     # ── Multi-timeframe confirmation ──────────────────────────────────────────
-    mtf_factor  = _multitf_factor(symbol, raw_score)
-    final_score = round(raw_score * mtf_factor, 2)
+    mtf_factor = _multitf_factor(symbol, raw_score)
+
+    # ── Market regime factor (4h cached, no extra API cost) ───────────────────
+    regime = get_market_regime()
+    if regime == "bull":
+        regime_factor = 1.15 if raw_score > 0 else 0.85   # favour longs
+    elif regime == "bear":
+        regime_factor = 1.15 if raw_score < 0 else 0.85   # favour shorts
+    elif regime == "sideways":
+        regime_factor = 0.85                               # dampen all signals
+    else:
+        regime_factor = 1.0
+
+    final_score = round(raw_score * mtf_factor * regime_factor, 2)
     final_score = max(-100.0, min(100.0, final_score))
 
     if final_score >= LONG_THRESHOLD:
@@ -121,7 +133,8 @@ def analyze_symbol(symbol: str) -> dict:
     logger.info(
         f"{symbol:12s}  TA={ta_score:+.1f}  ADX={adx:.1f}  News={news_score:+.1f}"
         f"  FG={fear_greed_score:+.1f}  Fund={funding_rate*100:+.4f}%"
-        f"  MTF×{mtf_factor:.2f}  Final={final_score:+.1f}  → {action.upper()}"
+        f"  MTF×{mtf_factor:.2f}  Regime={regime}×{regime_factor:.2f}"
+        f"  Final={final_score:+.1f}  → {action.upper()}"
     )
 
     return {
@@ -136,4 +149,5 @@ def analyze_symbol(symbol: str) -> dict:
         "indicators":       indicators,
         "atr":              atr,
         "adx":              adx,
+        "regime":           regime,
     }

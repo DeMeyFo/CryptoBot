@@ -11,6 +11,7 @@ from config import (
 from bitget_client import get_top_symbols, get_current_price, place_order, close_order
 from strategy import analyze_symbol
 from risk_manager import best_sl_tp, calculate_atr_sl_tp, progress_to_tp, check_exit, unrealized_pnl
+from news_sentiment import validate_trade, get_claude_exit_signals
 from database import (
     init_db, save_trade, close_trade, get_open_trades,
     update_trade_sl, increment_pyramid_count, get_latest_signal_score,
@@ -154,9 +155,25 @@ def _try_pyramid(trade: dict, current_price: float):
 # ── Trade management ──────────────────────────────────────────────────────────
 
 def manage_open_trades():
+    # Claude exit signals – piggybacked on the 15-min news refresh (no extra cost)
+    claude_exits = get_claude_exit_signals()
+
     for trade in get_open_trades(dry_run=DRY_RUN):
         price = get_current_price(trade["symbol"])
         if price == 0:
+            continue
+
+        coin = trade["symbol"].replace("USDT", "")
+
+        # ── Claude emergency exit ─────────────────────────────────────────────
+        if claude_exits.get(coin) or claude_exits.get(trade["symbol"]):
+            pnl_now = unrealized_pnl(trade, price)
+            close_order(trade["symbol"], trade["side"], trade["entry_price"], trade["size_usdt"])
+            realised = close_trade(trade["id"], price, "closed_claude_exit")
+            logger.warning(
+                f"🤖 CLAUDE EXIT  {trade['side'].upper()} {trade['symbol']}"
+                f"  exit={price:.6g}  PnL={realised:+.2f} USDT  (emergency news signal)"
+            )
             continue
 
         pnl    = unrealized_pnl(trade, price)
@@ -216,7 +233,14 @@ def scan_new_entries():
 
         action   = analysis["action"]
         pos_size = _position_size(analysis["final_score"])
-        order    = place_order(symbol, action, pos_size, LEVERAGE, price)
+
+        # ── Claude trade validation ───────────────────────────────────────────
+        approved, reason = validate_trade(symbol, action, analysis)
+        if not approved:
+            logger.info(f"  🚫 Claude rejected {action.upper()} {symbol}: {reason}")
+            continue
+
+        order = place_order(symbol, action, pos_size, LEVERAGE, price)
         if not order:
             continue
 
