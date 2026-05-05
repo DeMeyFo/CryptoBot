@@ -78,6 +78,7 @@ WHITELIST = [
     "SOLUSDT",    # PF 1.33  WR 47%  (3m Binance)
     "TAOUSDT",    # PF 1.25  WR 48%  (3m Binance)
     "BTCUSDT",    # PF 1.36  WR 49%  (3m Binance)
+    "ETHUSDT",    # added by user request – watch performance
     "CLUSDT",     # PF 3.30  WR 50%  (1H backtest – no Binance data)
     "BUSDT",      # PF 3.00  WR 57%  (1H backtest – no Binance data)
     "RAVEUSDT",   # PF inf   WR 100% (1H backtest – no Binance data)

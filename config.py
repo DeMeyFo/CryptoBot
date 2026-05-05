@@ -34,13 +34,13 @@ CANDLE_INTERVAL = os.getenv("CANDLE_INTERVAL", "15m")
 CANDLE_LIMIT    = 200
 
 # --- ADX Trend Filter ---
-ADX_NO_TREND    = float(os.getenv("ADX_NO_TREND", "20"))   # below → skip trade
+ADX_NO_TREND    = float(os.getenv("ADX_NO_TREND", "18"))   # below → skip trade
 ADX_WEAK_TREND  = float(os.getenv("ADX_WEAK_TREND", "25")) # below → dampen score 30%
 ADX_STRONG_TREND = float(os.getenv("ADX_STRONG_TREND", "40")) # above → boost score 20%
 
 # --- Signal Thresholds ---
-LONG_THRESHOLD  = 55
-SHORT_THRESHOLD = -55
+LONG_THRESHOLD  = 45
+SHORT_THRESHOLD = -45
 
 # --- Signal Weights (must sum to 1.0) ---
 TA_WEIGHT          = 0.50
