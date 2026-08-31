@@ -8,3 +8,11 @@ feedparser>=6.0.10
 streamlit>=1.35.0
 python-dotenv>=1.0.0
 plotly>=5.20.0
+
+# ML dependencies
+xgboost>=2.0.0
+scikit-learn>=1.4.0
+lightgbm>=4.0.0
+
+# Testing
+hypothesis>=6.100.0

@@ -5,6 +5,9 @@
 *.db
 *.log
 
+# Backtest input cache
+.backtest_cache/
+
 # Python
 __pycache__/
 *.py[cod]

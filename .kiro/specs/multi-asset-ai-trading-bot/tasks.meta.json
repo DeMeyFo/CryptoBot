@@ -1,0 +1,602 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 ML-Abhängigkeiten zu requirements.txt hinzufügen": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103692997
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103702302
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103925056
+      }
+    ],
+    "1.2 Exchange-Adapter-Abstraktion implementieren (`exchange_adapter.py`)": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693075
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103703112
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103925897
+      }
+    ],
+    "1.3 Unit-Tests für Exchange-Adapter schreiben": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693096
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103930387
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104040318
+      }
+    ],
+    "2.1 Feature-Pipeline implementieren": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693120
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103931107
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104041123
+      }
+    ],
+    "2.2 Automatisierten Kausalitätstest implementieren (`causality_test`)": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693143
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104045578
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104167233
+      }
+    ],
+    "2.3 Property-Tests für Feature-Kausalität schreiben": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693164
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104046370
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104168127
+      }
+    ],
+    "3. Checkpoint — Sicherstellen, dass Feature-Pipeline und Adapter korrekt kompilieren und importieren": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693189
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106803781
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106808212
+      }
+    ],
+    "4.1 ML-Tabellen und Prediction-Logger implementieren": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693210
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104047136
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104169090
+      }
+    ],
+    "4.2 `init_db()` in `database.py` erweitern": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693231
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104178654
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104378660
+      }
+    ],
+    "4.3 Unit-Tests für Prediction-Logger schreiben": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693254
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104179399
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104379620
+      }
+    ],
+    "5.1 Label-Generierung und Walk-Forward-Splits implementieren": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693296
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104180213
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104380447
+      }
+    ],
+    "5.2 `RegimeClassifier`-Klasse implementieren": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693358
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104388889
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104649222
+      }
+    ],
+    "5.3 `WalkForwardTrainer`-Klasse implementieren": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693379
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104389716
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104649992
+      }
+    ],
+    "5.4 Property-Tests für Walk-Forward-Training schreiben": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693407
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104655137
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104964409
+      }
+    ],
+    "6. Checkpoint — Sicherstellen, dass Trainer, Classifier und Feature-Pipeline zusammenspielen": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693430
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106813204
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106817694
+      }
+    ],
+    "7.1 Konfiguration und Validierung implementieren": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693453
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104655898
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104965436
+      }
+    ],
+    "7.2 Gate-Entscheidungslogik implementieren": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693475
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104970324
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105115618
+      }
+    ],
+    "7.3 Property-Tests für ML-Gate schreiben": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693499
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105121077
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105340824
+      }
+    ],
+    "8.1 LLM-Regime-Advisor implementieren": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693525
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104970925
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105116532
+      }
+    ],
+    "8.2 Unit-Tests für LLM-Advisor schreiben": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693546
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105121907
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105341770
+      }
+    ],
+    "9.1 ML-Gate in `scan_new_entries()` integrieren": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693572
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105346323
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105507031
+      }
+    ],
+    "9.2 ML-Gate-Initialisierung in `main()` integrieren": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693598
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105347190
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105507825
+      }
+    ],
+    "9.3 Property-Test für bestehende Sicherheits-Limits schreiben": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693616
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105512240
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105933107
+      }
+    ],
+    "10. Checkpoint — Sicherstellen, dass die Trading-Loop mit ML-Gate kompiliert und die Bypass-Logik funktioniert": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693635
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106822101
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106826600
+      }
+    ],
+    "11.1 ML-Gate-Unterstützung in `portfolio_backtest.py` ergänzen": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693656
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105512984
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105932108
+      }
+    ],
+    "11.2 Deterministische Tests für Backtest-Integration schreiben": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693715
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105942826
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106362256
+      }
+    ],
+    "12.1 Retraining-Logik in `ml_trainer.py` ergänzen": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693740
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105943525
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106361300
+      }
+    ],
+    "12.2 Outcome-Tracking in der Trading-Loop implementieren": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693758
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106368258
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106645206
+      }
+    ],
+    "13.1 Fehlerresilienz-Tests implementieren": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693778
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106368981
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106646006
+      }
+    ],
+    "13.2 End-to-End-Verifikation durchführen": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693799
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106650921
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106794268
+      }
+    ],
+    "14. Finaler Checkpoint — Sicherstellen, dass alle Tests bestehen und Module korrekt zusammenspielen": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788103693819
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106830930
+      },
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106835392
+      }
+    ],
+    "1. Abhängigkeiten und Exchange-Adapter-Abstraktion": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104040376
+      }
+    ],
+    "2. Kausale Feature-Pipeline (`ml_features.py`)": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104168180
+      }
+    ],
+    "4. Datenbank-Erweiterung für ML-Vorhersagen (`ml_prediction_log.py`)": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104379641
+      }
+    ],
+    "5. Walk-Forward-Training und Regime-Klassifikator (`ml_trainer.py`)": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788104964475
+      }
+    ],
+    "7. ML-Gate Orchestrator (`ml_gate.py`)": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105340864
+      }
+    ],
+    "8. Claude-LLM Regime-Advisor (`ml_gate_llm.py`)": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105341835
+      }
+    ],
+    "9. Integration in die Trading-Loop (`main.py`)": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788105933129
+      }
+    ],
+    "11. Backtest-Integration": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106362276
+      }
+    ],
+    "12. Periodisches Retraining und Modell-Versionierung": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106645263
+      }
+    ],
+    "13. Finale Validierung und Fehlerresilienz": [
+      {
+        "executionId": "a04c5569-caf3-4115-b801-2b4c3b8aee05",
+        "chatSessionId": "sess_0869dc6e-b3e9-42bf-a3ac-9fe302568170",
+        "timestamp": 1788106794292
+      }
+    ]
+  }
+}
