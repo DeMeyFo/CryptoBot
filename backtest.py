@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 """
-CryptoBot Backtest – Walk-forward simulation on historical OHLCV data.
+Causal, cost-aware backtest for the exact live trend-breakout core.
 
-Only the TA component is simulated (News / Fear&Greed / Funding have no
-historical data). All indicators mirror the live bot exactly.
-
-Usage:
-  python backtest.py                            # whitelist, 15m, Bitget (10 days)
-  python backtest.py --months 3                 # 3 months via Binance
-  python backtest.py --months 6 --granularity 1H
-  python backtest.py BTCUSDT SOLUSDT --months 3
-  python backtest.py --trades                   # print every trade
+Signals are calculated on a completed candle and entered at the next candle open.
+Funding settles against the position held before that bar open, before stops or a
+new entry at the same timestamp. Stops are checked before a closed candle can
+update the following candle's trail. Fees and adverse slippage apply both ways.
 """
 
 import argparse
@@ -19,437 +14,706 @@ import time as _time
 
 import pandas as pd
 import requests
-import ta
 
-from technical_analysis import fetch_ohlcv, _supertrend
-from config import (
-    LONG_THRESHOLD, SHORT_THRESHOLD,
-    USE_ATR_SL_TP, ATR_SL_MULTIPLIER, ATR_TP_MULTIPLIER,
-    STOP_LOSS_PCT, TAKE_PROFIT_PCT,
-    LEVERAGE, POSITION_SIZE_USDT, TOP_COINS_COUNT,
-    ADX_NO_TREND, ADX_WEAK_TREND, ADX_STRONG_TREND,
-    TRAILING_STOP_PCT,
-)
 from bitget_client import get_top_symbols
+from config import (
+    DONCHIAN_PERIOD,
+    EMA_HISTORY_CANDLES,
+    POSITION_SIZE_USDT,
+    SLIPPAGE_RATE,
+    STRATEGY_TIMEFRAME,
+    TAKER_FEE_RATE,
+)
+from risk_manager import best_sl_tp, next_atr_trailing_stop
+from technical_analysis import (
+    closed_candles,
+    evaluate_signal,
+    fetch_ohlcv,
+    prepare_indicators,
+)
 
-WARMUP = 60  # candles needed before indicators are reliable
-
-_BINANCE_BASE = "https://api.binance.com"
+WARMUP = max(EMA_HISTORY_CANDLES, DONCHIAN_PERIOD)
+_BINANCE_FUTURES_BASE = "https://fapi.binance.com"
 _BINANCE_INTERVAL_MAP = {"15m": "15m", "1H": "1h", "4H": "4h", "1D": "1d"}
 
 
-def fetch_binance_ohlcv(symbol: str, interval: str = "15m", months: int = 3) -> pd.DataFrame:
-    """
-    Fetch historical OHLCV from Binance public API – no API key required.
-    Paginates automatically to cover the requested number of months.
-    Falls back to an empty DataFrame if the symbol is not listed on Binance.
-    """
-    bi = _BINANCE_INTERVAL_MAP.get(interval, interval.lower())
-    end_ms   = int(_time.time() * 1000)
-    start_ms = end_ms - int(months * 30.44 * 24 * 3600 * 1000)
+class FundingDataError(RuntimeError):
+    """Historical funding is required but could not be loaded completely."""
 
+
+def _finite_float(value) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed != parsed or parsed in (float("inf"), float("-inf")):
+        return None
+    return parsed
+
+
+def fetch_binance_ohlcv(symbol: str, interval: str = "1H",
+                         months: int = 12) -> pd.DataFrame:
+    """Fetch Binance USDT-M perpetual candles without authentication."""
+    api_interval = _BINANCE_INTERVAL_MAP.get(interval, interval.lower())
+    end_ms = int(_time.time() * 1000)
+    start_ms = end_ms - int(months * 30.44 * 24 * 3600 * 1000)
     candles = []
-    cur = start_ms
-    while cur < end_ms:
+    cursor = start_ms
+
+    while cursor < end_ms:
         try:
-            resp = requests.get(
-                f"{_BINANCE_BASE}/api/v3/klines",
-                params={"symbol": symbol, "interval": bi,
-                        "startTime": cur, "endTime": end_ms, "limit": 1000},
-                timeout=10,
+            response = requests.get(
+                f"{_BINANCE_FUTURES_BASE}/fapi/v1/klines",
+                params={
+                    "symbol": symbol,
+                    "interval": api_interval,
+                    "startTime": cursor,
+                    "endTime": end_ms,
+                    "limit": 1000,
+                },
+                timeout=15,
             )
-            if resp.status_code != 200:
+            if response.status_code != 200:
                 break
-            batch = resp.json()
+            batch = response.json()
             if not batch:
                 break
             candles.extend(batch)
+            cursor = int(batch[-1][0]) + 1
             if len(batch) < 1000:
                 break
-            cur = int(batch[-1][0]) + 1
         except Exception:
             break
 
     if not candles:
         return pd.DataFrame()
-
-    df = pd.DataFrame(candles, columns=[
+    frame = pd.DataFrame(candles, columns=[
         "timestamp", "open", "high", "low", "close", "volume",
-        "close_time", "quote_volume", "trades",
-        "taker_buy_base", "taker_buy_quote", "ignore",
+        "close_time", "quote_volume", "trades", "taker_buy_base",
+        "taker_buy_quote", "ignore",
     ])
-    for col in ("open", "high", "low", "close", "volume"):
-        df[col] = pd.to_numeric(df[col])
-    df["timestamp"] = pd.to_datetime(df["timestamp"].astype(float), unit="ms")
-    df = df[["timestamp", "open", "high", "low", "close", "volume"]].copy()
-    df.sort_values("timestamp", inplace=True)
-    df.reset_index(drop=True, inplace=True)
-    return df
+    for column in ("open", "high", "low", "close", "volume"):
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    frame["timestamp"] = pd.to_datetime(frame["timestamp"], unit="ms", utc=True)
+    frame = frame[["timestamp", "open", "high", "low", "close", "volume"]]
+    frame.dropna(inplace=True)
+    frame.sort_values("timestamp", inplace=True)
+    frame.drop_duplicates(subset=["timestamp"], keep="last", inplace=True)
+    frame.reset_index(drop=True, inplace=True)
+    return frame
 
 
-def _load_ohlcv(symbol: str, granularity: str, limit: int, months: int) -> tuple[pd.DataFrame, str]:
-    """Return (DataFrame, source_label). Uses Binance when months>0, else Bitget."""
+def fetch_binance_funding_history(symbol: str, start_time_ms: int,
+                                   end_time_ms: int) -> list[dict]:
+    """Load every Binance funding settlement in the interval or fail closed."""
+    start_time_ms = int(start_time_ms)
+    end_time_ms = int(end_time_ms)
+    if start_time_ms > end_time_ms:
+        raise FundingDataError("funding start is after end")
+    alignment_tolerance_ms = 1000
+    request_start_ms = max(0, start_time_ms - alignment_tolerance_ms)
+    request_end_ms = end_time_ms + alignment_tolerance_ms
+    cursor = request_start_ms
+    events = {}
+    while cursor <= request_end_ms:
+        try:
+            response = requests.get(
+                f"{_BINANCE_FUTURES_BASE}/fapi/v1/fundingRate",
+                params={
+                    "symbol": symbol,
+                    "startTime": cursor,
+                    "endTime": request_end_ms,
+                    "limit": 1000,
+                },
+                timeout=15,
+            )
+        except Exception as exc:
+            raise FundingDataError(f"Binance funding request failed: {exc}") from exc
+        if response.status_code != 200:
+            raise FundingDataError(
+                f"Binance funding HTTP status {response.status_code}"
+            )
+        try:
+            batch = response.json()
+        except Exception as exc:
+            raise FundingDataError("Binance funding response was not valid JSON") from exc
+        if not isinstance(batch, list):
+            raise FundingDataError("Binance funding response was not a list")
+        if not batch:
+            break
+
+        last_time = None
+        for row in batch:
+            if not isinstance(row, dict):
+                raise FundingDataError("Binance funding response contained a malformed row")
+            try:
+                funding_time = int(row["fundingTime"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise FundingDataError("Binance funding row has invalid fundingTime") from exc
+            rate = _finite_float(row.get("fundingRate"))
+            if rate is None:
+                raise FundingDataError("Binance funding row has invalid fundingRate")
+            row_symbol = row.get("symbol") or symbol
+            if row_symbol != symbol:
+                raise FundingDataError(
+                    f"Binance funding returned unexpected symbol {row_symbol}"
+                )
+            mark_price = _finite_float(row.get("markPrice"))
+            if mark_price is not None and mark_price <= 0:
+                mark_price = None
+            last_time = funding_time if last_time is None else max(last_time, funding_time)
+            if request_start_ms <= funding_time <= request_end_ms:
+                events[funding_time] = {
+                    "symbol": row_symbol,
+                    "funding_time": funding_time,
+                    "funding_rate": rate,
+                    "mark_price": mark_price,
+                }
+
+        if last_time is None or last_time < cursor:
+            raise FundingDataError("Binance funding pagination did not advance")
+        cursor = last_time + 1
+        if len(batch) < 1000:
+            break
+
+    ordered = [events[key] for key in sorted(events)]
+    max_gap_ms = 8 * 60 * 60 * 1000
+    if end_time_ms - start_time_ms >= max_gap_ms:
+        if not ordered:
+            raise FundingDataError(
+                "Binance returned no funding settlements for an interval of at least 8h"
+            )
+        if ordered[0]["funding_time"] > start_time_ms + max_gap_ms:
+            raise FundingDataError("Binance funding history does not cover the interval start")
+        if ordered[-1]["funding_time"] < end_time_ms - max_gap_ms:
+            raise FundingDataError("Binance funding history does not cover the interval end")
+    return ordered
+
+
+def _load_ohlcv(symbol: str, granularity: str, limit: int,
+                months: int) -> tuple[pd.DataFrame, str]:
     if months > 0:
-        df = fetch_binance_ohlcv(symbol, granularity, months)
-        if not df.empty:
-            return df, "Binance"
-        print(f"    (Binance has no data for {symbol}, falling back to Bitget)")
-    df = fetch_ohlcv(symbol, granularity, limit)
-    return df, "Bitget"
+        # Long EMAs need substantially more history than their nominal period.
+        # Fetch a three-month pre-roll, but report/trade only the requested span.
+        frame = fetch_binance_ohlcv(symbol, granularity, months + 3)
+        if not frame.empty:
+            return frame, "Binance Futures"
+        print(f"    (no Binance Futures data for {symbol}; falling back to Bitget)")
+    return fetch_ohlcv(symbol, granularity, limit), "Bitget Futures"
 
 
-# ── Indicator pre-computation ─────────────────────────────────────────────────
-
-def _precompute(df: pd.DataFrame) -> pd.DataFrame:
-    """Add all indicator columns in a single pass – no look-ahead bias."""
-    df = df.copy()
-    close  = df["close"]
-    high   = df["high"]
-    low    = df["low"]
-    volume = df["volume"]
-
-    df["ema9"]       = ta.trend.ema_indicator(close, 9)
-    df["ema21"]      = ta.trend.ema_indicator(close, 21)
-    df["ema50"]      = ta.trend.ema_indicator(close, 50)
-    df["rsi"]        = ta.momentum.RSIIndicator(close, 14).rsi()
-
-    sr = ta.momentum.StochRSIIndicator(close, 14, smooth1=3, smooth2=3)
-    df["stoch_k"]    = sr.stochrsi_k()
-    df["stoch_d"]    = sr.stochrsi_d()
-
-    macd = ta.trend.MACD(close, window_slow=26, window_fast=12, window_sign=9)
-    df["macd"]       = macd.macd()
-    df["macd_sig"]   = macd.macd_signal()
-    df["macd_hist"]  = macd.macd_diff()
-
-    bb = ta.volatility.BollingerBands(close, window=20, window_dev=2)
-    df["bb_lower"]   = bb.bollinger_lband()
-    df["bb_upper"]   = bb.bollinger_hband()
-
-    df["atr"]        = ta.volatility.AverageTrueRange(high, low, close, window=14).average_true_range()
-    df["vol_sma"]    = ta.trend.sma_indicator(volume, window=20)
-    df["supertrend"] = _supertrend(df, period=10, multiplier=3.0)
-    df["adx"]        = ta.trend.ADXIndicator(high, low, close, window=14).adx()
-
-    return df
+def _adverse_fill(raw_price: float, side: str, entry: bool) -> float:
+    if entry:
+        factor = 1 + SLIPPAGE_RATE if side == "long" else 1 - SLIPPAGE_RATE
+    else:
+        factor = 1 - SLIPPAGE_RATE if side == "long" else 1 + SLIPPAGE_RATE
+    return raw_price * factor
 
 
-def _score_at(df: pd.DataFrame, i: int) -> tuple[int, float]:
-    """Return (TA score, ATR) at row i using pre-computed columns."""
-    r    = df.iloc[i]
-    prev = df.iloc[i - 1]
-    score = 0
-
-    # ── EMA crossover (±20) ───────────────────────────────────────────────────
-    v9, v21, v50 = r["ema9"], r["ema21"], r["ema50"]
-    if not any(pd.isna([v9, v21, v50])):
-        if v9 > v21 > v50:   score += 20
-        elif v9 > v21:        score += 10
-        elif v9 < v21 < v50: score -= 20
-        elif v9 < v21:        score -= 10
-
-    # ── RSI (±15) ─────────────────────────────────────────────────────────────
-    rsi = r["rsi"]
-    if not pd.isna(rsi):
-        if rsi < 25:   score += 15
-        elif rsi < 35: score += 8
-        elif rsi < 45: score += 3
-        elif rsi > 75: score -= 15
-        elif rsi > 65: score -= 8
-        elif rsi > 55: score -= 3
-
-    # ── Stochastic RSI (±20) ──────────────────────────────────────────────────
-    k, k_prev = r["stoch_k"], prev["stoch_k"]
-    if not pd.isna(k) and not pd.isna(k_prev):
-        if k < 0.20 and k > k_prev:   score += 20
-        elif k < 0.20:                  score += 10
-        elif k > 0.80 and k < k_prev:  score -= 20
-        elif k > 0.80:                  score -= 10
-
-    # ── MACD (±20) ────────────────────────────────────────────────────────────
-    ml, sl = r["macd"], r["macd_sig"]
-    hist, p_hist = r["macd_hist"], prev["macd_hist"]
-    if not any(pd.isna([ml, sl, hist, p_hist])):
-        if ml > sl and p_hist <= 0:   score += 20
-        elif ml > sl:                  score += 10
-        elif ml < sl and p_hist >= 0: score -= 20
-        elif ml < sl:                  score -= 10
-
-    # ── Bollinger Bands (±15) ─────────────────────────────────────────────────
-    bl, bu, price = r["bb_lower"], r["bb_upper"], r["close"]
-    if not pd.isna(bl) and not pd.isna(bu):
-        band = bu - bl
-        if band > 0:
-            pct = (price - bl) / band
-            if pct < 0.10:   score += 15
-            elif pct < 0.25: score += 7
-            elif pct > 0.90: score -= 15
-            elif pct > 0.75: score -= 7
-
-    # ── Supertrend (±20) ──────────────────────────────────────────────────────
-    st, st_prev = r["supertrend"], prev["supertrend"]
-    if not pd.isna(st) and not pd.isna(st_prev):
-        if st == 1 and st_prev == -1:   score += 20
-        elif st == 1:                    score += 10
-        elif st == -1 and st_prev == 1: score -= 20
-        elif st == -1:                   score -= 10
-
-    # ── Volume amplifier ──────────────────────────────────────────────────────
-    vs = r["vol_sma"]
-    if not pd.isna(vs) and vs > 0:
-        vr = r["volume"] / vs
-        if vr > 2.0:   score = int(score * 1.15)
-        elif vr > 1.5: score = int(score * 1.08)
-
-    score = max(-100, min(100, score))
-    atr   = float(r["atr"]) if not pd.isna(r["atr"]) else 0.0
-    adx   = float(r["adx"]) if not pd.isna(r["adx"]) else 25.0
-    return score, atr, adx
+def funding_payment(side: str, quantity: float, mark_price: float,
+                    funding_rate: float) -> float:
+    """Signed settlement cashflow; leverage is deliberately not part of it."""
+    direction = 1.0 if side == "long" else -1.0
+    return -direction * float(quantity) * float(mark_price) * float(funding_rate)
 
 
-# ── SL/TP helper ──────────────────────────────────────────────────────────────
+def _align_funding_events_to_bars(events: list[dict], bar_times_ms: list[int],
+                                   tolerance_ms: int = 1000) -> tuple[list[dict], list[int]]:
+    """Snap exchange timestamp jitter only; reject genuine intrabar settlements."""
+    from bisect import bisect_left
 
-def _make_sl_tp(side: str, price: float, atr: float) -> tuple[float, float]:
-    if USE_ATR_SL_TP and atr > 0:
-        if side == "long":
-            return price - atr * ATR_SL_MULTIPLIER, price + atr * ATR_TP_MULTIPLIER
-        return price + atr * ATR_SL_MULTIPLIER, price - atr * ATR_TP_MULTIPLIER
-    if side == "long":
-        return price * (1 - STOP_LOSS_PCT), price * (1 + TAKE_PROFIT_PCT)
-    return price * (1 + STOP_LOSS_PCT), price * (1 - TAKE_PROFIT_PCT)
-
-
-# ── Core backtest ─────────────────────────────────────────────────────────────
-
-def backtest(symbol: str, granularity: str = "15m", limit: int = 1000,
-             threshold: int = 50, months: int = 0) -> dict | None:
-    df, source = _load_ohlcv(symbol, granularity, limit, months)
-    if df.empty or len(df) < WARMUP + 10:
-        return {"symbol": symbol, "error": f"only {len(df)} candles available"}
-
-    df    = _precompute(df)
-    trade = None   # currently open simulated trade
-    trades: list  = []
-    equity = 0.0
-    peak   = 0.0
-    max_dd = 0.0
-
-    for i in range(WARMUP, len(df)):
-        row   = df.iloc[i]
-        high  = float(row["high"])
-        low   = float(row["low"])
-        price = float(row["close"])
-
-        # ── Manage open trade ─────────────────────────────────────────────────
-        if trade:
-            side = trade["side"]
-
-            # Ratchet trailing stop before checking exit
-            if side == "long":
-                new_sl = round(price * (1 - TRAILING_STOP_PCT), 8)
-                if new_sl > trade["sl"]:
-                    trade["sl"] = new_sl
-            else:
-                new_sl = round(price * (1 + TRAILING_STOP_PCT), 8)
-                if trade["sl"] == 0 or new_sl < trade["sl"]:
-                    trade["sl"] = new_sl
-
-            sl, tp = trade["sl"], trade["tp"]
-            exit_price = result = None
-
-            if side == "long":
-                if low <= sl:     exit_price, result = sl, "sl"
-                elif high >= tp:  exit_price, result = tp, "tp"
-            else:
-                if high >= sl:    exit_price, result = sl, "sl"
-                elif low <= tp:   exit_price, result = tp, "tp"
-
-            if exit_price:
-                pnl_pct  = (exit_price - trade["entry"]) / trade["entry"]
-                if side == "short":
-                    pnl_pct = -pnl_pct
-                pnl_usdt = POSITION_SIZE_USDT * pnl_pct * LEVERAGE
-
-                # Trailing stop exits that are profitable → classify as "trail" (win)
-                if result == "sl" and pnl_usdt > 0:
-                    result = "trail"
-
-                trade.update({
-                    "exit_price": exit_price,
-                    "result":     result,
-                    "pnl":        round(pnl_usdt, 4),
-                    "exit_ts":    str(row["timestamp"])[:16],
-                    "duration":   i - trade["entry_idx"],
-                })
-                trades.append(trade)
-
-                equity += pnl_usdt
-                peak    = max(peak, equity)
-                max_dd  = max(max_dd, peak - equity)
-                trade   = None
-            continue   # no new entry in same candle
-
-        # ── Look for new entry ────────────────────────────────────────────────
-        score, atr, adx = _score_at(df, i)
-
-        # ADX filter – mirror live bot behaviour
-        if adx < ADX_NO_TREND:
+    boundaries = sorted(set(int(timestamp) for timestamp in bar_times_ms))
+    aligned = []
+    unaligned = []
+    for event in events:
+        raw_time = int(event["funding_time"])
+        position = bisect_left(boundaries, raw_time)
+        candidates = boundaries[max(0, position - 1):position + 1]
+        if not candidates:
+            unaligned.append(raw_time)
             continue
-        if adx < ADX_WEAK_TREND:
-            score = int(score * 0.70)
-        elif adx > ADX_STRONG_TREND:
-            score = min(100, int(score * 1.20))
+        nearest = min(candidates, key=lambda timestamp: abs(timestamp - raw_time))
+        if abs(nearest - raw_time) > max(0, int(tolerance_ms)):
+            unaligned.append(raw_time)
+            continue
+        normalized = dict(event)
+        normalized["raw_funding_time"] = raw_time
+        normalized["funding_time"] = nearest
+        aligned.append(normalized)
+    aligned.sort(key=lambda event: event["funding_time"])
+    return aligned, unaligned
 
-        if score >= threshold:
-            sl, tp = _make_sl_tp("long", price, atr)
-            trade  = {
-                "symbol": symbol, "side": "long",
-                "entry": price, "sl": sl, "tp": tp,
-                "score": score, "atr": atr,
-                "entry_ts": str(row["timestamp"])[:16],
-                "entry_idx": i,
+
+def _settle_funding_before_bar(trade: dict | None, events: list[dict],
+                               event_index: int, bar_time_ms: int,
+                               bar_open: float) -> tuple[int, float, int, int]:
+    """Consume settlements through this open before any stop or next-open entry."""
+    cashflow = 0.0
+    fallback_count = 0
+    applied_count = 0
+    while event_index < len(events) and events[event_index]["funding_time"] <= bar_time_ms:
+        event = events[event_index]
+        event_index += 1
+        if trade is None:
+            continue
+        mark_price = event.get("mark_price")
+        mark_source = "api_markPrice"
+        if mark_price is None or float(mark_price) <= 0:
+            mark_price = bar_open
+            mark_source = "bar_open_fallback"
+            fallback_count += 1
+        amount = funding_payment(
+            trade["side"], trade["quantity"], mark_price, event["funding_rate"]
+        )
+        trade["funding"] = float(trade.get("funding") or 0.0) + amount
+        trade.setdefault("funding_events", []).append({
+            "funding_time": event["funding_time"],
+            "funding_rate": event["funding_rate"],
+            "mark_price": float(mark_price),
+            "mark_source": mark_source,
+            "amount": amount,
+        })
+        cashflow += amount
+        applied_count += 1
+    return event_index, cashflow, fallback_count, applied_count
+
+
+def _finish_trade(trade: dict, raw_exit: float, result: str,
+                  timestamp, exit_index: int) -> dict:
+    exit_price = _adverse_fill(raw_exit, trade["side"], entry=False)
+    direction = 1.0 if trade["side"] == "long" else -1.0
+    gross_pnl = (exit_price - trade["entry"]) * trade["quantity"] * direction
+    exit_fee = exit_price * trade["quantity"] * TAKER_FEE_RATE
+    total_fees = trade["entry_fee"] + exit_fee
+    price_fee_pnl = gross_pnl - total_fees
+    funding_value = trade.get("funding")
+    funding_known = funding_value is not None
+    funding = float(funding_value) if funding_known else 0.0
+    net_pnl = price_fee_pnl + funding
+    trade.update({
+        "exit_price": exit_price,
+        "result": "trail" if result == "sl" and gross_pnl > 0 else result,
+        "gross_pnl": round(gross_pnl, 6),
+        "fees": round(total_fees, 6),
+        "price_fee_pnl": round(price_fee_pnl, 6),
+        "funding": round(funding, 6) if funding_known else None,
+        "pnl": round(net_pnl, 6),
+        "exit_ts": str(timestamp)[:16],
+        "duration": exit_index - trade["entry_idx"],
+    })
+    return trade
+
+
+def _mark_to_market(equity: float, trade: dict | None,
+                    close_price: float) -> float:
+    if not trade:
+        return equity
+    hypothetical_exit = _adverse_fill(close_price, trade["side"], entry=False)
+    direction = 1.0 if trade["side"] == "long" else -1.0
+    gross = (hypothetical_exit - trade["entry"]) * trade["quantity"] * direction
+    exit_fee = hypothetical_exit * trade["quantity"] * TAKER_FEE_RATE
+    return equity + gross - trade["entry_fee"] - exit_fee
+
+
+def backtest(symbol: str, granularity: str = STRATEGY_TIMEFRAME,
+             limit: int = 1000, months: int = 0) -> dict:
+    raw_frame, source = _load_ohlcv(symbol, granularity, limit, months)
+    raw_frame = closed_candles(raw_frame, granularity)
+    if raw_frame.empty or len(raw_frame) < WARMUP + 10:
+        return {"symbol": symbol, "trades": 0, "error": f"only {len(raw_frame)} candles"}
+
+    frame = prepare_indicators(raw_frame)
+    if months > 0:
+        evaluation_start = (
+            frame["timestamp"].iloc[-1] - pd.Timedelta(days=months * 30.44)
+        ).floor("h")
+        evaluation_index = int(frame["timestamp"].searchsorted(evaluation_start))
+    else:
+        evaluation_index = WARMUP
+    loop_start = max(WARMUP, evaluation_index - 1)
+
+    funding_available = source == "Binance Futures"
+    funding_status = "available from Binance /fapi/v1/fundingRate"
+    funding_events = []
+    if funding_available:
+        start_ms = int(pd.Timestamp(frame["timestamp"].iloc[loop_start]).timestamp() * 1000)
+        end_ms = int(pd.Timestamp(frame["timestamp"].iloc[-1]).timestamp() * 1000)
+        try:
+            funding_events = fetch_binance_funding_history(symbol, start_ms, end_ms)
+        except FundingDataError as exc:
+            return {
+                "symbol": symbol,
+                "granularity": granularity,
+                "source": source,
+                "candles": len(frame) - evaluation_index,
+                "trades": 0,
+                "funding_available": False,
+                "funding_status": f"unavailable: {exc}",
+                "error": f"funding unavailable (fail-closed): {exc}",
             }
-        elif score <= -threshold:
-            sl, tp = _make_sl_tp("short", price, atr)
-            trade  = {
-                "symbol": symbol, "side": "short",
-                "entry": price, "sl": sl, "tp": tp,
-                "score": score, "atr": atr,
-                "entry_ts": str(row["timestamp"])[:16],
-                "entry_idx": i,
+        bar_times_ms = [
+            int(pd.Timestamp(timestamp).timestamp() * 1000)
+            for timestamp in frame["timestamp"].iloc[loop_start:]
+        ]
+        funding_events, unaligned = _align_funding_events_to_bars(
+            funding_events, bar_times_ms, tolerance_ms=1000
+        )
+        if unaligned:
+            return {
+                "symbol": symbol,
+                "granularity": granularity,
+                "source": source,
+                "candles": len(frame) - evaluation_index,
+                "trades": 0,
+                "funding_available": False,
+                "funding_status": "unavailable: settlements fall inside candles",
+                "error": (
+                    "funding unavailable (fail-closed): settlement ordering cannot "
+                    f"be resolved on {granularity} bars"
+                ),
             }
+    else:
+        funding_status = "funding unavailable for Bitget fallback; not treated as zero"
+
+    trades = []
+    trade = None
+    pending = None
+    cash_equity = 0.0
+    peak_mtm = 0.0
+    max_mtm_drawdown = 0.0
+    funding_index = 0
+    applied_funding_events = 0
+    funding_mark_fallbacks = 0
+
+    for index in range(loop_start, len(frame)):
+        row = frame.iloc[index]
+        bar_open = float(row["open"])
+        bar_high = float(row["high"])
+        bar_low = float(row["low"])
+        bar_close = float(row["close"])
+        bar_time_ms = int(pd.Timestamp(row["timestamp"]).timestamp() * 1000)
+
+        # The old position receives a settlement at this timestamp. A stop at the
+        # same open still pays it; a pending entry at this open does not.
+        if funding_available:
+            funding_index, funding_cashflow, fallback_count, applied_count = (
+                _settle_funding_before_bar(
+                    trade, funding_events, funding_index, bar_time_ms, bar_open
+                )
+            )
+            cash_equity += funding_cashflow
+            funding_mark_fallbacks += fallback_count
+            applied_funding_events += applied_count
+
+        # A previous close signal is executed no earlier than this bar's open.
+        if trade is None and pending is not None:
+            entry_price = _adverse_fill(bar_open, pending["side"], entry=True)
+            stop_loss, _ = best_sl_tp(pending["side"], entry_price, pending["atr"])
+            quantity = POSITION_SIZE_USDT / entry_price
+            trade = {
+                "symbol": symbol,
+                "side": pending["side"],
+                "entry": entry_price,
+                "entry_price": entry_price,
+                "quantity": quantity,
+                "size_usdt": POSITION_SIZE_USDT,
+                "sl": stop_loss,
+                "stop_loss": stop_loss,
+                "initial_stop_loss": stop_loss,
+                "best_price": entry_price,
+                "entry_atr": pending["atr"],
+                "entry_fee": POSITION_SIZE_USDT * TAKER_FEE_RATE,
+                "funding": 0.0 if funding_available else None,
+                "funding_events": [],
+                "score": pending["score"],
+                "entry_ts": str(row["timestamp"])[:16],
+                "entry_idx": index,
+            }
+            pending = None
+
+        if trade is not None:
+            stop = float(trade["sl"])
+            raw_exit = None
+            if trade["side"] == "long":
+                if bar_open <= stop:
+                    raw_exit = bar_open
+                elif bar_low <= stop:
+                    raw_exit = stop
+            else:
+                if bar_open >= stop:
+                    raw_exit = bar_open
+                elif bar_high >= stop:
+                    raw_exit = stop
+
+            if raw_exit is not None:
+                completed = _finish_trade(
+                    trade, raw_exit, "sl", row["timestamp"], index
+                )
+                trades.append(completed)
+                # Funding was booked when each settlement occurred; add only the
+                # close's price/fee component here to avoid double counting it.
+                cash_equity += completed["price_fee_pnl"]
+                trade = None
+            else:
+                trail_high = bar_high
+                trail_low = bar_low
+                if index == trade["entry_idx"]:
+                    # Live enters shortly after the bar opens and cannot know the
+                    # pre-entry extrema. Use close-only first-bar extrema in both paths.
+                    trail_high = max(trade["entry"], bar_close)
+                    trail_low = min(trade["entry"], bar_close)
+                new_stop, best_price, _ = next_atr_trailing_stop(
+                    trade,
+                    candle_close=bar_close,
+                    candle_high=trail_high,
+                    candle_low=trail_low,
+                    atr=float(row["atr"]),
+                )
+                trade["sl"] = new_stop
+                trade["stop_loss"] = new_stop
+                trade["best_price"] = best_price
+
+        mtm = _mark_to_market(cash_equity, trade, bar_close)
+        peak_mtm = max(peak_mtm, mtm)
+        max_mtm_drawdown = max(max_mtm_drawdown, peak_mtm - mtm)
+
+        # A position closed intrabar may form a fresh setup only at this bar close.
+        if trade is None:
+            signal = evaluate_signal(frame, index)
+            if signal.get("entry_signal") in ("long", "short"):
+                pending = {
+                    "side": signal["entry_signal"],
+                    "atr": float(signal["atr"]),
+                    "score": float(signal["score"]),
+                }
+
+    open_price_fee_mtm = 0.0
+    open_funding = None
+    open_mtm = 0.0
+    if trade is not None:
+        # Live has no artificial end-of-dataset exit. Keep the open position out
+        # of trade statistics and expose price/fee and settled funding separately.
+        open_price_fee_mtm = _mark_to_market(
+            0.0, trade, float(frame.iloc[-1]["close"])
+        )
+        open_funding = trade.get("funding")
+        open_mtm = open_price_fee_mtm + (
+            float(open_funding) if open_funding is not None else 0.0
+        )
+
+    closed_price_fee_pnl = sum(item["price_fee_pnl"] for item in trades)
+    closed_funding = (
+        sum(float(item["funding"]) for item in trades)
+        if funding_available else None
+    )
+    closed_pnl = sum(item["pnl"] for item in trades)
+    total_funding = (
+        float(closed_funding or 0.0) + float(open_funding or 0.0)
+        if funding_available else None
+    )
+    common = {
+        "symbol": symbol,
+        "granularity": granularity,
+        "source": source,
+        "candles": len(frame) - evaluation_index,
+        "from": str(frame["timestamp"].iloc[evaluation_index])[:16],
+        "to": str(frame["timestamp"].iloc[-1])[:16],
+        "funding_available": funding_available,
+        "funding_status": funding_status,
+        "funding": round(total_funding, 2) if total_funding is not None else None,
+        "closed_funding": round(closed_funding, 2) if closed_funding is not None else None,
+        "open_funding": round(open_funding, 2) if open_funding is not None else None,
+        "funding_events": applied_funding_events if funding_available else None,
+        "funding_mark_fallbacks": funding_mark_fallbacks if funding_available else None,
+        "price_fee_pnl": round(closed_price_fee_pnl, 2),
+        "pnl": round(closed_pnl, 2),
+        "open_price_fee_mtm": round(open_price_fee_mtm, 2),
+        "open_mtm": round(open_mtm, 2),
+        "max_drawdown": round(max_mtm_drawdown, 2),
+    }
 
     if not trades:
-        return {"symbol": symbol, "granularity": granularity, "trades": 0,
-                "error": "no trades triggered"}
+        return {
+            **common,
+            "trades": 0,
+            "error": "no closed trades triggered",
+            "all_trades": [],
+        }
 
-    wins   = [t for t in trades if t["result"] in ("tp", "trail")]
-    losses = [t for t in trades if t["result"] == "sl"]
-    gp     = sum(t["pnl"] for t in wins)
-    gl     = abs(sum(t["pnl"] for t in losses))
+    wins = [item for item in trades if item["pnl"] > 0]
+    losses = [item for item in trades if item["pnl"] <= 0]
+    gross_profit = sum(item["pnl"] for item in wins)
+    gross_loss = abs(sum(item["pnl"] for item in losses))
+    fees = sum(item["fees"] for item in trades)
 
     return {
-        "symbol":        symbol,
-        "granularity":   granularity,
-        "source":        source,
-        "candles":       len(df),
-        "from":          str(df["timestamp"].iloc[0])[:16],
-        "to":            str(df["timestamp"].iloc[-1])[:16],
-        "trades":        len(trades),
-        "wins":          len(wins),
-        "losses":        len(losses),
-        "win_rate":      round(len(wins) / len(trades) * 100, 1),
-        "pnl":           round(equity, 2),
-        "roi_pct":       round(equity / POSITION_SIZE_USDT * 100, 2),
-        "profit_factor": round(gp / gl, 2) if gl > 0 else float("inf"),
-        "max_drawdown":  round(max_dd, 2),
-        "avg_win":       round(gp / len(wins), 2)    if wins   else 0,
-        "avg_loss":      round(-gl / len(losses), 2) if losses else 0,
-        "best_trade":    round(max(t["pnl"] for t in trades), 2),
-        "worst_trade":   round(min(t["pnl"] for t in trades), 2),
-        "avg_duration":  round(sum(t["duration"] for t in trades) / len(trades), 1),
-        "all_trades":    trades,
+        **common,
+        "trades": len(trades),
+        "wins": len(wins),
+        "losses": len(losses),
+        "win_rate": round(len(wins) / len(trades) * 100, 1),
+        "fees": round(fees, 2),
+        "roi_pct": round(closed_pnl / POSITION_SIZE_USDT * 100, 2),
+        "profit_factor": round(gross_profit / gross_loss, 2) if gross_loss > 0 else float("inf"),
+        "avg_win": round(gross_profit / len(wins), 2) if wins else 0.0,
+        "avg_loss": round(-gross_loss / len(losses), 2) if losses else 0.0,
+        "best_trade": round(max(item["pnl"] for item in trades), 2),
+        "worst_trade": round(min(item["pnl"] for item in trades), 2),
+        "avg_duration": round(sum(item["duration"] for item in trades) / len(trades), 1),
+        "all_trades": trades,
     }
 
 
-# ── Output ────────────────────────────────────────────────────────────────────
+def _bar(character="-", width=68):
+    return character * width
 
-def _bar(c="─", n=60): return c * n
 
-
-def print_result(r: dict, show_trades: bool = False):
-    if "error" in r and r.get("trades", 0) == 0:
-        print(f"\n  [{r['symbol']}] {r['error']}")
+def print_result(result: dict, show_trades: bool = False):
+    if result.get("trades", 0) == 0:
+        print(f"\n  [{result['symbol']}] {result.get('error', 'no trades')}")
+        if "funding_status" in result:
+            print(f"  Funding       : {result['funding_status']}")
+        if "open_mtm" in result:
+            suffix = "" if result.get("funding_available") else " (funding unavailable)"
+            print(f"  Open MTM      : {result['open_mtm']:+.2f} USDT{suffix}")
         return
 
-    sl_str = f"ATR×{ATR_SL_MULTIPLIER}" if USE_ATR_SL_TP else f"{STOP_LOSS_PCT*100:.1f}%"
-    tp_str = f"ATR×{ATR_TP_MULTIPLIER}" if USE_ATR_SL_TP else f"{TAKE_PROFIT_PCT*100:.1f}%"
-
     print(f"\n{_bar()}")
-    print(f"  {r['symbol']}  │  {r['granularity']}  │  {r.get('source','?')}  │  {r['from']} → {r['to']}")
-    print(f"  {r['candles']} candles  │  SL: {sl_str}  TP: {tp_str}  │  {LEVERAGE}x leverage")
-    print(_bar("·"))
-    trails = sum(1 for t in r.get("all_trades", []) if t["result"] == "trail")
-    print(f"  Trades        : {r['trades']}   (W: {r['wins']}  Trail: {trails}  L: {r['losses']}  WR: {r['win_rate']}%)")
-    print(f"  Total PnL     : {r['pnl']:+.2f} USDT   ROI: {r['roi_pct']:+.2f}%")
-    print(f"  Profit Factor : {r['profit_factor']:.2f}")
-    print(f"  Max Drawdown  : {r['max_drawdown']:.2f} USDT")
-    print(f"  Avg Win / Loss: {r['avg_win']:+.2f} / {r['avg_loss']:+.2f} USDT")
-    print(f"  Best / Worst  : {r['best_trade']:+.2f} / {r['worst_trade']:+.2f} USDT")
-    print(f"  Avg Duration  : {r['avg_duration']:.0f} candles")
+    print(
+        f"  {result['symbol']} | {result['granularity']} | {result['source']} | "
+        f"{result['from']} -> {result['to']}"
+    )
+    print(
+        f"  {result['candles']} candles | next-open | "
+        f"fee {TAKER_FEE_RATE * 100:.3f}% + slippage {SLIPPAGE_RATE * 100:.3f}% per side"
+    )
+    print(_bar("."))
+    print(
+        f"  Trades        : {result['trades']} (W {result['wins']} / L {result['losses']}, "
+        f"WR {result['win_rate']}%)"
+    )
+    if result["funding_available"]:
+        print(f"  Net PnL       : {result['pnl']:+.2f} USDT (modeled fees/slippage + funding)")
+        print(f"  Price/fee PnL : {result['price_fee_pnl']:+.2f} USDT")
+        print(
+            f"  Funding       : {result['closed_funding']:+.2f} USDT closed | "
+            f"{result.get('open_funding') or 0:+.2f} USDT open | "
+            f"{result['funding_events']} events"
+        )
+        if result.get("funding_mark_fallbacks"):
+            print(
+                f"  Mark fallback : {result['funding_mark_fallbacks']} settlement(s) used bar-open"
+            )
+    else:
+        print(f"  Price/fee PnL : {result['price_fee_pnl']:+.2f} USDT (funding unavailable)")
+        print(f"  Funding       : {result['funding_status']}")
+    open_suffix = "" if result["funding_available"] else " (ex funding)"
+    print(f"  Open MTM      : {result.get('open_mtm', 0):+.2f} USDT{open_suffix}")
+    print(f"  Explicit fees : {result['fees']:.2f} USDT (slippage already in fills)")
+    print(f"  Profit factor : {result['profit_factor']:.2f}")
+    print(f"  Max MTM DD    : {result['max_drawdown']:.2f} USDT")
+    print(f"  Avg win/loss  : {result['avg_win']:+.2f} / {result['avg_loss']:+.2f} USDT")
+    print(f"  Best/worst    : {result['best_trade']:+.2f} / {result['worst_trade']:+.2f} USDT")
+    print(f"  Avg duration  : {result['avg_duration']:.1f} candles")
     print(_bar())
 
-    if show_trades and r.get("all_trades"):
-        print(f"  {'Entry Time':<17} {'Side':<6} {'Entry':>12} {'Exit':>12} {'Result':<6} {'PnL':>9}")
-        print(f"  {'─'*17} {'─'*5} {'─'*12} {'─'*12} {'─'*6} {'─'*9}")
-        for t in r["all_trades"]:
-            print(
-                f"  {t['entry_ts']:<17} {t['side'].upper():<6}"
-                f" {t['entry']:>12.6g} {t.get('exit_price', 0):>12.6g}"
-                f" {t['result']:<6} {t['pnl']:>+9.2f}"
+    if show_trades:
+        for item in result["all_trades"]:
+            funding_text = (
+                f" funding={item['funding']:+.3f}"
+                if item.get("funding") is not None else " funding=unavailable"
             )
-        print(_bar())
+            print(
+                f"  {item['entry_ts']} {item['side'].upper():5s} "
+                f"{item['entry']:.8g} -> {item['exit_price']:.8g} "
+                f"{item['result']:5s} {item['pnl']:+.3f}{funding_text}"
+            )
 
 
-# ── CLI ───────────────────────────────────────────────────────────────────────
+def _aggregate_summary(results: list[dict]) -> dict:
+    funding_complete = all(result.get("funding_available") for result in results)
+    price_fee_pnl = sum(float(result.get("price_fee_pnl") or 0.0) for result in results)
+    known_funding = sum(
+        float(result.get("closed_funding") or 0.0)
+        for result in results if result.get("funding_available")
+    )
+    return {
+        "funding_complete": funding_complete,
+        "price_fee_pnl": price_fee_pnl,
+        "known_funding": known_funding,
+        "net_pnl": (
+            sum(float(result.get("pnl") or 0.0) for result in results)
+            if funding_complete else None
+        ),
+    }
+
 
 def main():
-    parser = argparse.ArgumentParser(description="CryptoBot Backtest")
-    parser.add_argument("symbols", nargs="*",
-                        help="Symbols to test (default: top coins from config)")
-    parser.add_argument("--granularity", "-g", default="15m",
-                        help="Candle interval, e.g. 15m, 1H, 4H (default: 15m)")
-    parser.add_argument("--limit", "-l", type=int, default=1000,
-                        help="Number of candles to fetch (max ~1000, default: 1000)")
-    parser.add_argument("--trades", action="store_true",
-                        help="Print every individual trade")
-    parser.add_argument("--threshold", "-t", type=int, default=50,
-                        help="TA score threshold for entry (default: 50).")
-    parser.add_argument("--months", "-m", type=int, default=0,
-                        help="Fetch N months of history from Binance (e.g. 3 or 6). "
-                             "Falls back to Bitget if symbol not on Binance.")
+    parser = argparse.ArgumentParser(description="Cost-aware CryptoBot backtest")
+    parser.add_argument("symbols", nargs="*", help="Symbols (default: research universe)")
+    parser.add_argument("--granularity", "-g", default=STRATEGY_TIMEFRAME)
+    parser.add_argument("--limit", "-l", type=int, default=1000)
+    parser.add_argument("--months", "-m", type=int, default=0)
+    parser.add_argument("--trades", action="store_true")
+    # Accepted for compatibility with old commands; the new entry is a boolean setup.
+    parser.add_argument("--threshold", type=float, default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
 
-    symbols = args.symbols
+    symbols = args.symbols or get_top_symbols(8)
     if not symbols:
-        print("Fetching top symbols from Bitget…")
-        symbols = get_top_symbols(TOP_COINS_COUNT)
-        if not symbols:
-            print("Could not fetch symbols – check API connection.")
-            sys.exit(1)
+        print("No symbols available")
+        sys.exit(1)
 
-    source_label = f"Binance ({args.months}m)" if args.months else "Bitget (~10d)"
-    print(f"\n{'═'*60}")
-    print(f"  CryptoBot Backtest")
+    print(f"\n{'=' * 68}")
+    print("  CryptoBot signal/exit-core study (not a portfolio or fill simulation)")
     print(f"  Symbols: {', '.join(symbols)}")
-    print(f"  Granularity: {args.granularity}  │  Source: {source_label}")
-    print(f"  Position: {POSITION_SIZE_USDT} USDT  │  Leverage: {LEVERAGE}x")
-    print(f"  Note: TA-only (News/FG/Funding excluded – no historical data)")
-    print(f"{'═'*60}")
+    print(
+        f"  Timeframe: {args.granularity} | notional: {POSITION_SIZE_USDT:.2f} USDT/trade | "
+        f"source: {'Binance Futures' if args.months else 'Bitget Futures'}"
+    )
+    print(f"{'=' * 68}")
 
     results = []
-    for sym in symbols:
-        print(f"\n  Backtesting {sym}…", end=" ", flush=True)
-        r = backtest(sym, args.granularity, args.limit, args.threshold, args.months)
-        if r:
-            if r.get("trades", 0) > 0:
-                print(f"{r['trades']} trades  PnL: {r['pnl']:+.2f} USDT  WR: {r['win_rate']}%")
-            else:
-                print(r.get("error", "no trades"))
-            results.append(r)
-            print_result(r, show_trades=args.trades)
+    for symbol in symbols:
+        print(f"  Backtesting {symbol}...", end=" ", flush=True)
+        result = backtest(symbol, args.granularity, args.limit, args.months)
+        results.append(result)
+        if result.get("trades", 0):
+            metric_label = "net" if result.get("funding_available") else "price/fee"
+            print(
+                f"{result['trades']} trades, {metric_label} {result['pnl']:+.2f}, "
+                f"PF {result['profit_factor']:.2f}"
+            )
+        else:
+            print(result.get("error", "no trades"))
+        print_result(result, args.trades)
 
-    # Summary across all symbols
-    valid = [r for r in results if r.get("trades", 0) > 0]
-    if len(valid) > 1:
-        total_pnl    = sum(r["pnl"]    for r in valid)
-        total_trades = sum(r["trades"] for r in valid)
-        total_wins   = sum(r["wins"]   for r in valid)
-        print(f"\n{'═'*60}")
-        print(f"  SUMMARY  │  {len(valid)} symbols  │  {total_trades} total trades")
-        print(f"  Win Rate : {total_wins / total_trades * 100:.1f}%")
-        print(f"  Total PnL: {total_pnl:+.2f} USDT")
-        print(f"{'═'*60}\n")
+    valid = [result for result in results if result.get("trades", 0) > 0]
+    if valid:
+        total_trades = sum(result["trades"] for result in valid)
+        total_wins = sum(result["wins"] for result in valid)
+        total_fees = sum(result["fees"] for result in valid)
+        summary = _aggregate_summary(valid)
+        print(f"\n{'=' * 68}")
+        print(f"  SUMMARY | {len(valid)} symbols | {total_trades} trades")
+        print(f"  Win rate: {total_wins / total_trades * 100:.1f}%")
+        if summary["funding_complete"]:
+            print(
+                f"  Net PnL: {summary['net_pnl']:+.2f} USDT | "
+                f"price/fee: {summary['price_fee_pnl']:+.2f} | "
+                f"funding: {summary['known_funding']:+.2f} | "
+                f"explicit fees: {total_fees:.2f} USDT"
+            )
+        else:
+            print(
+                f"  Price/fee PnL: {summary['price_fee_pnl']:+.2f} USDT | "
+                f"explicit fees: {total_fees:.2f} USDT"
+            )
+            print(
+                f"  Known funding subset: {summary['known_funding']:+.2f} USDT; "
+                "combined net PnL unavailable because at least one result lacks funding"
+            )
+        print(f"{'=' * 68}\n")
 
 
 if __name__ == "__main__":
