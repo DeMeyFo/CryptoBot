@@ -20,8 +20,10 @@ MIN_POSITION_USDT = float(os.getenv("MIN_POSITION_USDT", "30"))
 MAX_POSITION_USDT = float(os.getenv("MAX_POSITION_USDT", str(POSITION_SIZE_USDT)))
 HIGH_CONVICTION_SCORE = float(os.getenv("HIGH_CONVICTION_SCORE", "90"))
 # Dynamic universe rotation: scan top-volume Perps beyond the base universe.
-# The ADX>=40 filter decides who trades; this just widens the scanner.
-DYNAMIC_UNIVERSE_ENABLED = os.getenv("DYNAMIC_UNIVERSE_ENABLED", "true").lower() == "true"
+# Default OFF: the scanner also picks up untested high-volume coins (e.g. newly
+# listed tokens) that were never backtested and caused outsized losses. Only the
+# 12 validated RESEARCH_UNIVERSE coins are traded unless explicitly re-enabled.
+DYNAMIC_UNIVERSE_ENABLED = os.getenv("DYNAMIC_UNIVERSE_ENABLED", "false").lower() == "true"
 DYNAMIC_UNIVERSE_MAX = int(os.getenv("DYNAMIC_UNIVERSE_MAX", "20"))
 TOP_COINS_COUNT = int(os.getenv("TOP_COINS_COUNT", "12"))
 LOOP_INTERVAL_SECONDS = int(os.getenv("LOOP_INTERVAL", "300"))

@@ -238,6 +238,17 @@ def _open_position_count() -> int:
     return len(get_open_trades(dry_run=DRY_RUN))
 
 
+def _symbol_has_open_trade(symbol: str) -> bool:
+    """Fresh DB check: is there already an open trade for this symbol?
+
+    Guards against two multi-timeframe sleeves opening the same symbol in the
+    same loop tick, which would double the intended risk.
+    """
+    return any(
+        t["symbol"] == symbol for t in get_open_trades(dry_run=DRY_RUN)
+    )
+
+
 def _funding_risk_state_complete() -> bool:
     if _funding_sync_thread and _funding_sync_thread.is_alive():
         logger.info("Funding reconciliation still running; entry scan deferred")
@@ -1231,6 +1242,11 @@ def scan_secondary_entries():
         if notional <= 0:
             continue
 
+        if _symbol_has_open_trade(symbol):
+            logger.info(
+                f"{symbol}: skip entry, position already open (concurrent sleeve)"
+            )
+            continue
         order = place_order(symbol, side, notional, LEVERAGE, observed_price)
         if not order:
             continue
@@ -1377,6 +1393,11 @@ def scan_new_entries():
             )
             continue
 
+        if _symbol_has_open_trade(symbol):
+            logger.info(
+                f"{symbol}: skip entry, position already open (concurrent sleeve)"
+            )
+            continue
         order = place_order(symbol, side, notional, LEVERAGE, observed_price)
         if not order:
             continue
