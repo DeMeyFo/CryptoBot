@@ -203,7 +203,7 @@ def section_pnl_chart():
 
     df = pd.DataFrame(history)
     df["cumulative"] = df["pnl_usdt"].cumsum()
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, format="ISO8601")
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -238,7 +238,7 @@ def section_monthly_heatmap():
         return
 
     df = pd.DataFrame(history)
-    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, format="ISO8601")
     df["month"] = df["timestamp"].dt.to_period("M")
     monthly = df.groupby("month")["pnl_usdt"].sum()
 
@@ -476,17 +476,37 @@ def section_backtest_reference():
     st.subheader("📊 Backtest-Referenz (24 Monate)")
     st.caption("Vergangene Backtest-Ergebnisse garantieren keine zukünftige Performance.")
 
+    st.markdown(
+        "**Konfiguration:** 20 Coins dynamisch (12 Base + Top-Volumen) · "
+        "Long-only · ADX≥40 · 80/20 (1H 3% + 4H 0.5%) · Maker-Fees · Vol-Adaptiv"
+    )
+
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Monatsrendite", "+8,15%", help="Kompoundiert, Backtest")
-    col2.metric("Max Drawdown", "13,8%")
-    col3.metric("Sortino", "2,58")
-    col4.metric("Median-Monat", "+4,06%")
+    col1.metric("Monatsrendite", "+11,74%", help="Kompoundiert, 80/20 + Maker")
+    col2.metric("Max Drawdown", "15,5%")
+    col3.metric("Sortino", "2,82", help="Bester risikoadjustierter Wert")
+    col4.metric("Median-Monat", "+3,08%")
 
     col5, col6, col7, col8 = st.columns(4)
-    col5.metric("Equity 1k→", "6.057 USDT", delta="+505,7%")
-    col6.metric("Profit-Faktor", "1,90")
-    col7.metric("Pos. Monate", "52%")
-    col8.metric("Trades (24M)", "282", help="207 auf 1H + 75 auf 4H")
+    col5.metric("Equity 1k→", "11.508 USDT", delta="+1.050,8%")
+    col6.metric("Profit-Faktor", "1,72 / 1,12", help="1H / 4H Sleeve")
+    col7.metric("Pos. Monate", "68%", help="15 von 22 Monaten positiv")
+    col8.metric("Trades (24M)", "455", help="360 auf 1H + 95 auf 4H")
+
+    st.markdown("---")
+    st.markdown("**Robustheit (Abhängigkeit von Einzelmonaten):**")
+    rc1, rc2, rc3, rc4 = st.columns(4)
+    rc1.metric("Alle Monate", "+11,74%/M")
+    rc2.metric("Ohne Top-1", "+9,29%/M")
+    rc3.metric("Ohne Top-2", "+7,36%/M")
+    rc4.metric("Ohne Top-3", "+5,96%/M")
+
+    st.markdown("---")
+    st.markdown("**Rendite-Szenarien:**")
+    sc1, sc2, sc3 = st.columns(3)
+    sc1.metric("🟢 Optimistisch", "+10-13%/M", help="Backtest hält, Trends stark")
+    sc2.metric("🟡 Realistisch", "+5-7%/M", help="Halber Backtest, Durchschnitt")
+    sc3.metric("🔴 Pessimistisch", "+0-3%/M", help="Seitwärtsmarkt, wenige Signale")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────
